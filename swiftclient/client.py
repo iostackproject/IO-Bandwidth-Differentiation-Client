@@ -209,6 +209,7 @@ class HTTPConnection(object):
             self.parsed_url.scheme,
             self.parsed_url.netloc,
             full_path)
+        
         self.resp = self._request(method, url, headers=headers, data=data,
                                   files=files, **self.requests_args)
         return self.resp
@@ -822,7 +823,7 @@ def delete_container(url, token, container, http_conn=None,
                               http_response_content=body)
 
 
-def get_object(url, token, container, name, http_conn=None,
+def get_object(url, token, container, name, bw, http_conn=None,
                resp_chunk_size=None, query_string=None,
                response_dict=None, headers=None):
     """
@@ -847,6 +848,7 @@ def get_object(url, token, container, name, http_conn=None,
               headers will be a dict and all header names will be lowercase.
     :raises ClientException: HTTP GET request failed
     """
+
     if http_conn:
         parsed, conn = http_conn
     else:
@@ -857,6 +859,9 @@ def get_object(url, token, container, name, http_conn=None,
     method = 'GET'
     headers = headers.copy() if headers else {}
     headers['X-Auth-Token'] = token
+    headers['BWlimit'] = bw
+
+    
     conn.request(method, path, '', headers)
     resp = conn.getresponse()
 
@@ -1351,10 +1356,10 @@ class Connection(object):
         """Wrapper for :func:`head_object`"""
         return self._retry(None, head_object, container, obj)
 
-    def get_object(self, container, obj, resp_chunk_size=None,
+    def get_object(self, container, obj, bw, resp_chunk_size=None,
                    query_string=None, response_dict=None, headers=None):
         """Wrapper for :func:`get_object`"""
-        return self._retry(None, get_object, container, obj,
+        return self._retry(None, get_object, container, obj, bw,
                            resp_chunk_size=resp_chunk_size,
                            query_string=query_string,
                            response_dict=response_dict, headers=headers)
