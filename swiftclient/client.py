@@ -209,7 +209,7 @@ class HTTPConnection(object):
             self.parsed_url.scheme,
             self.parsed_url.netloc,
             full_path)
-        
+
         self.resp = self._request(method, url, headers=headers, data=data,
                                   files=files, **self.requests_args)
         return self.resp
