@@ -12,6 +12,7 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import random
 from concurrent.futures import as_completed, CancelledError, TimeoutError
 from copy import deepcopy
 from errno import EEXIST, ENOENT
@@ -906,7 +907,7 @@ class SwiftService(object):
             options = dict(self._options, **options)
         else:
             options = self._options
-
+        bwlist = options.get('bandwidth')
         if not container:
             # Download everything if options['yes_all'] is set
             if options['yes_all']:
@@ -939,7 +940,7 @@ class SwiftService(object):
 
                         o_downs.extend(
                             self.thread_manager.object_dd_pool.submit(
-                                self._download_object_job, con, obj,
+                                self._download_object_job, con, obj, self._get_bandwidth(bwlist, objs.index(obj)),   
                                 options_copy
                             ) for obj in objs
                         )
@@ -969,15 +970,27 @@ class SwiftService(object):
 
             o_downs = [
                 self.thread_manager.object_dd_pool.submit(
-                    self._download_object_job, container, obj, options
+                    self._download_object_job, container, obj, self._get_bandwidth(bwlist, objects.index(obj)), options
                 ) for obj in objects
             ]
 
+
             for o_down in interruptable_as_completed(o_downs):
                 yield o_down.result()
+    
+    def _get_bandwidth(self, bwlist, index):
+        if bwlist:
+            if index > len(bwlist)-1:
+                return bwlist[len(bwlist)-1]
+            else:   
+                return bwlist[index] 
+        if not bwlist:
+            #MARC_TODO
+            return 30
+            
 
     @staticmethod
-    def _download_object_job(conn, container, obj, options):
+    def _download_object_job(conn, container, obj, bw, options):
         out_file = options['out_file']
         results_dict = {}
 
@@ -1004,8 +1017,10 @@ class SwiftService(object):
 
         try:
             start_time = time()
+            #bwlist = options['bandwidth']
+            #bw = bwlist[random.randint(0,len(bwlist)-1)]
             headers, body = \
-                conn.get_object(container, obj, resp_chunk_size=65536,
+                conn.get_object(container, obj, bw, resp_chunk_size=65536,
                                 headers=req_headers,
                                 response_dict=results_dict)
             headers_receipt = time()
@@ -1106,9 +1121,12 @@ class SwiftService(object):
                 else:
                     raise part["error"]
 
+
+            bwlist = options['bandwidth']
+
             o_downs = [
                 self.thread_manager.object_dd_pool.submit(
-                    self._download_object_job, container, obj, options
+                    self._download_object_job, container, obj, self._get_bandwidth(bwlist, objects.index(obj)), options
                 ) for obj in objects
             ]
 
@@ -1345,8 +1363,7 @@ class SwiftService(object):
         return upload_objects
 
     @staticmethod
-    def _create_container_job(
-            conn, container, headers=None, policy_source=None):
+    def _create_container_job(conn, container, headers=None, policy_source=None):
         """
         Create a container using the given connection
 

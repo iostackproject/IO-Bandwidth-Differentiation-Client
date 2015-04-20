@@ -19,6 +19,7 @@ from __future__ import print_function
 import logging
 import signal
 import socket
+import re
 
 from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 from os import environ, walk, _exit as os_exit
@@ -145,7 +146,7 @@ def st_delete(parser, args, output_manager):
             output_manager.error(err.value)
 
 
-st_download_options = '''[--all] [--marker] [--prefix <prefix>]
+st_download_options = '''[--all] [--bandwidth] [--marker] [--prefix <prefix>]
                       [--output <out_file>] [--object-threads <threads>]
                       [--container-threads <threads>] [--no-download]
                       [--skip-identical] <container> <object>
@@ -164,6 +165,11 @@ Positional arguments:
 Optional arguments:
   --all                 Indicates that you really want to download
                         everything in the account.
+  --bandwidth           Specify a bandwidth limit for the download. Specify 
+                        multiple bandwidths for different objects separting 
+                        them with comma. 
+                        Example: -b 20,30,40
+                        Default is 30.
   --marker              Marker to use when starting a container or account
                         download.
   --prefix <prefix>     Only download items beginning with <prefix>
@@ -186,8 +192,19 @@ Optional arguments:
                         sides.
 '''.strip("\n")
 
+def bw_callback(option, opt, value, parser):
+    setattr(parser.values, option.dest, value.split(','))
+
+def check_bw(options, output_manager):
+    if options.bandwidth:
+        for c in options.bandwidth:
+            if not c.isdigit():
+                return False
+    return True            
 
 def st_download(parser, args, output_manager):
+    parser.add_option('-b', '--bandwidth', dest='bandwidth', type='string', action='callback', callback=bw_callback, 
+    help='Specify a bandwidth limit for the download')
     parser.add_option(
         '-a', '--all', action='store_true', dest='yes_all',
         default=False, help='Indicates that you really want to download '
@@ -230,12 +247,17 @@ def st_download(parser, args, output_manager):
     if options.out_file == '-':
         options.verbose = 0
 
+    if not check_bw(options,output_manager):
+        output_manager.error('Usage: %s: %s\n\n'
+                    'Invalid value for --bandwidth option' ,BASENAME,  st_download_help)
+        return
+
     if options.out_file and len(args) != 2:
         exit('-o option only allowed for single file downloads')
 
     if (not args and not options.yes_all) or (args and options.yes_all):
         output_manager.error('Usage: %s download %s\n%s', BASENAME,
-                             st_download_options, st_download_help)
+                             st_download_options, st_download_help) 
         return
 
     _opts = vars(options)
